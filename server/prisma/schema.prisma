@@ -1,0 +1,90 @@
+// docmanageapp/server/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum DocumentType {
+  Kiruvchi
+  Chiquvchi
+}
+
+enum DocumentStage {
+  PENDING_REGISTRATION
+  REGISTRATION
+  RESOLUTION
+  ASSIGNMENT
+  EXECUTION
+  DRAFTING
+  REVISION_REQUESTED
+  SIGNATURE
+  DISPATCH
+  FINAL_REVIEW
+  COMPLETED
+  REJECTED
+  ON_HOLD
+  CANCELLED
+  ARCHIVED
+}
+
+model Role {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  description String?
+  users       User[]
+}
+
+model Department {
+  id    Int    @id @default(autoincrement())
+  name  String @unique
+  users User[]
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  email        String   @unique
+  name         String?
+  password     String
+
+  roleId       Int
+  role         Role     @relation(fields: [roleId], references: [id])
+
+  departmentId Int
+  department   Department @relation(fields: [departmentId], references: [id])
+
+  managerId    Int?
+  manager      User?    @relation("UserManagedBy", fields: [managerId], references: [id])
+  reports      User[]   @relation("UserManagedBy")
+
+  documents     Document[] @relation("DocumentAuthor")
+  tasks         Document[] @relation("DocumentExecutor")
+  internalTasks Document[] @relation("InternalDocumentExecutor") // <-- ДОБАВЛЕНО
+}
+
+model Document {
+  id             Int           @id @default(autoincrement())
+  title          String
+  content        String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  type           DocumentType  @default(Kiruvchi)
+  stage          DocumentStage @default(PENDING_REGISTRATION)
+  deadline       DateTime?
+  source         String?
+
+  authorId       Int
+  author         User          @relation("DocumentAuthor", fields: [authorId], references: [id])
+
+  mainExecutorId Int?
+  mainExecutor   User?         @relation("DocumentExecutor", fields: [mainExecutorId], references: [id])
+
+  // --- НОВЫЕ ПОЛЯ ---
+  internalAssigneeId Int?
+  internalAssignee   User? @relation("InternalDocumentExecutor", fields: [internalAssigneeId], references: [id])
+  // -----------------
+}

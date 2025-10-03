@@ -1,0 +1,5 @@
+{
+  "name": "DocManageApp",
+  "description": "A web application to manage incoming and outgoing documents in an organization. Documents are processed, reviewed, and delegated based on organizational hierarchy and roles, with AI-powered suggestions.",
+  "requestFramePermissions": []
+}

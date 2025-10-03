@@ -1,0 +1,239 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "DocManageApp API",
+    "description": "API for managing documents, users, roles, and discipline within the Agrobank Executive Discipline System. This is a mock API.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "Mock API Server"
+    }
+  ],
+  "paths": {
+    "/users": {
+      "get": {
+        "summary": "Get all users",
+        "tags": ["User Management"],
+        "responses": {
+          "200": {
+            "description": "A list of users.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/User"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Add a new user",
+        "tags": ["User Management"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The created user.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/{userId}": {
+      "put": {
+        "summary": "Update an existing user",
+        "tags": ["User Management"],
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "$ref": "#/components/responses/UserResponse" },
+          "404": { "description": "User not found" }
+        }
+      },
+      "delete": {
+        "summary": "Delete a user",
+        "tags": ["User Management"],
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User deleted successfully"
+          },
+          "404": {
+            "description": "User not found"
+          }
+        }
+      }
+    },
+    "/roles": {
+        "get": {
+            "summary": "Get all roles",
+            "tags": ["Role Management"],
+            "responses": {
+                "200": {
+                    "description": "A list of roles.",
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "array",
+                                "items": { "$ref": "#/components/schemas/Role" }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "post": {
+            "summary": "Add a new role",
+            "tags": ["Role Management"],
+            "requestBody": {
+                "required": true,
+                "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RoleInput" } } }
+            },
+            "responses": {
+                "200": { "$ref": "#/components/responses/RoleResponse" }
+            }
+        }
+    },
+    "/correspondences": {
+      "get": {
+        "summary": "Get correspondences for the current user",
+        "tags": ["Correspondence"],
+        "description": "The list of correspondences returned depends on the role of the logged-in user.",
+        "responses": {
+          "200": {
+            "description": "A list of correspondences.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Correspondence"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "name": { "type": "string" },
+          "email": { "type": "string", "format": "email" },
+          "role": { "type": "string" },
+          "department": { "type": "string" },
+          "managerId": { "type": "integer" }
+        }
+      },
+      "UserInput": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "email": { "type": "string", "format": "email" },
+          "role": { "type": "string" },
+          "department": { "type": "string" }
+        }
+      },
+      "Role": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "description": { "type": "string" }
+        }
+      },
+      "RoleInput": {
+        "type": "object",
+        "properties": {
+            "name": { "type": "string" },
+            "description": { "type": "string" }
+        }
+      },
+      "Correspondence": {
+        "type": "object",
+        "properties": {
+            "id": { "type": "integer" },
+            "type": { "type": "string", "enum": ["Kiruvchi", "Chiquvchi"] },
+            "title": { "type": "string" },
+            "content": { "type": "string" },
+            "source": { "type": "string" },
+            "stage": { "type": "string" },
+            "deadline": { "type": "string", "format": "date-time" },
+            "department": { "type": "string" },
+            "mainExecutorId": { "type": "integer" }
+        }
+      }
+    },
+    "responses": {
+        "UserResponse": {
+            "description": "A single user object.",
+            "content": {
+                "application/json": { "schema": { "$ref": "#/components/schemas/User" } }
+            }
+        },
+        "RoleResponse": {
+            "description": "A single role object.",
+            "content": {
+                "application/json": { "schema": { "$ref": "#/components/schemas/Role" } }
+            }
+        }
+    }
+  },
+  "tags": [
+      { "name": "User Management", "description": "Operations about users" },
+      { "name": "Role Management", "description": "Operations about roles" },
+      { "name": "Correspondence", "description": "Operations about documents" }
+  ]
+}
