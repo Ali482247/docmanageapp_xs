@@ -3,7 +3,9 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { UserRole } from '../constants';
-import { HomeIcon, UsersIcon, KeyIcon, CommandLineIcon, ScaleIcon } from './icons/IconComponents';
+// Update the import to match the actual exports from IconComponents
+import { UsersIcon, KeyIcon, ScaleIcon } from './icons/IconComponents';
+import { HomeIcon } from './icons/HomeIcon';
 
 const Dock: React.FC = () => {
     const { user } = useAuth();
@@ -13,7 +15,7 @@ const Dock: React.FC = () => {
         { path: '/users', label: 'Foydalanuvchilar', icon: <UsersIcon />, roles: [UserRole.Admin] },
         { path: '/roles', label: 'Rollar', icon: <KeyIcon />, roles: [UserRole.Admin] },
         { path: '/discipline', label: 'Intizom', icon: <ScaleIcon />, roles: [UserRole.Admin] },
-        { path: '/api-docs', label: 'API', icon: <CommandLineIcon />, roles: [UserRole.Admin] },
+        // { path: '/api-docs', label: 'API', icon: <CommandLineIcon />, roles: [UserRole.Admin] },
     ];
     
     const filteredNavItems = navItems.filter(item => user && item.roles.includes(user.role as UserRole));

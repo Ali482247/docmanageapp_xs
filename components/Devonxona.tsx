@@ -1,106 +1,195 @@
-// docmanageapp/components/Devonxona.tsx
-import React, { useState, useEffect } from 'react';
+// src/components/Devonxona.tsx
+
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { Correspondence } from '../types';
 import { getCorrespondences } from '../services/api';
-import CorrespondenceList from './CorrespondenceList';
 import { UserRole } from '../constants';
 import RoleSpecificDashboard from './RoleSpecificDashboard';
+import DocumentCard from './DocumentCard';
+import CreateCorrespondenceModal from './CreateCorrespondenceModal';
+import { PlusIcon, SearchIcon } from './icons/IconComponents';
+
+// Список категорий из Figma
+const KARTOTEKA_ITEMS = [
+    "Barchasi",
+    "Markaziy Bank",
+    "Murojaatlar",
+    "Prezident Administratsiyasi",
+    "Vazirlar Mahkamasi",
+    "Xizmat yozishmalari",
+    "Nazoratdagi",
+];
 
 const Devonxona: React.FC = () => {
     const { user } = useAuth();
     const [correspondences, setCorrespondences] = useState<Correspondence[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
-    const [activeTab, setActiveTab] = useState<'kiruvchi' | 'chiquvchi' | 'hisobot'>('kiruvchi');
+    
+    // Состояния для фильтров
+    const [activeTab, setActiveTab] = useState<'kiruvchi' | 'chiquvchi'>('kiruvchi');
+    const [activeKartoteka, setActiveKartoteka] = useState('Barchasi');
+    const [searchTerm, setSearchTerm] = useState('');
+
+    const [isCreateModalOpen, setCreateModalOpen] = useState(false);
+
+    const fetchData = () => {
+        if (!user) return;
+        setLoading(true);
+        setError('');
+        getCorrespondences()
+            .then(data => {
+                // Преобразуем данные с сервера, чтобы они соответствовали типу Correspondence
+                const formattedData = data.map((doc: any) => ({
+                    ...doc,
+                    type: doc.type, // Kiruvchi | Chiquvchi
+                    stage: doc.stage, // Enum из Prisma
+                    deadline: doc.deadline,
+                    mainExecutor: doc.mainExecutor,
+                    internalAssignee: doc.internalAssignee,
+                }));
+                setCorrespondences(formattedData);
+            })
+            .catch(() => setError('Hujjatlarni yuklashda xatolik yuz berdi.'))
+            .finally(() => setLoading(false));
+    };
 
     useEffect(() => {
-        if (user && user.role !== UserRole.Resepshn) { // У Resepshn нет списка
-            setLoading(true);
-            getCorrespondences()
-                .then(data => setCorrespondences(data))
-                .catch(() => setError('Hujjatlarni yuklashda xatolik.'))
-                .finally(() => setLoading(false));
+        // Условие, чтобы не загружать список для ролей со спец. дашбордом
+        if (user && ![UserRole.Resepshn, UserRole.BankKengashiKotibi, UserRole.KollegialOrganKotibi].includes(user.role as UserRole)) {
+            fetchData();
         } else {
             setLoading(false);
         }
     }, [user]);
 
-    if (!user) return null; // Ожидаем загрузку пользователя
+    const filteredCorrespondences = useMemo(() => {
+        return correspondences
+            .filter(c => c.type.toLowerCase() === activeTab)
+            .filter(c => {
+                 // Фильтр по картотеке (пока MOCK, нужно будет добавить поле в БД)
+                 if (activeKartoteka === 'Barchasi') return true;
+                 // @ts-ignore
+                 return c.kartoteka === activeKartoteka;
+            })
+            .filter(c => {
+                const search = searchTerm.toLowerCase();
+                if (!search) return true;
+                return c.title.toLowerCase().includes(search) ||
+                       (c.content && c.content.toLowerCase().includes(search)) ||
+                       (c.mainExecutor?.name && c.mainExecutor.name.toLowerCase().includes(search));
+            });
+    }, [correspondences, activeTab, activeKartoteka, searchTerm]);
+
+    if (!user) return null;
 
     // Для ролей с особым дашбордом
-    if (user.role === UserRole.Resepshn || user.role === UserRole.BankKengashiKotibi || user.role === UserRole.KollegialOrganKotibi) {
+    if ([UserRole.Resepshn, UserRole.BankKengashiKotibi, UserRole.KollegialOrganKotibi].includes(user.role as UserRole)) {
         return <RoleSpecificDashboard user={user} />;
     }
 
-    const filteredCorrespondences = correspondences.filter(c => {
-        if (activeTab === 'kiruvchi') return c.type === 'Kiruvchi';
-        if (activeTab === 'chiquvchi') return c.type === 'Chiquvchi';
-        return false;
-    });
-
     return (
-        <div className="h-full flex flex-col text-white">
-            {/* Header */}
-            <header className="flex-shrink-0 flex items-center justify-between pb-4 border-b border-white/10">
-                <div className="flex items-center gap-4">
-                    <h1 className="text-2xl font-bold tracking-wider">DEVONXONA</h1>
-                    <div className="flex items-center gap-2 text-white/50">
-                        <button className="p-1 rounded-full hover:bg-white/10">&lt;</button>
-                        <button className="p-1 rounded-full hover:bg-white/10">&gt;</button>
+        <>
+            <div className="flex flex-col h-full text-white">
+                {/* Header */}
+                <header className="flex-shrink-0 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-6">
+                    <div>
+                        <h1 className="text-3xl font-bold tracking-wider">DEVONXONA</h1>
+                        <p className="text-white/60">Sizda {filteredCorrespondences.length} ta hujjat mavjud</p>
                     </div>
-                </div>
-                <div className="w-full max-w-xs">
-                    <input 
-                        type="text"
-                        placeholder="Qidirish..."
-                        className="w-full px-4 py-2 bg-black/20 border border-white/20 rounded-full focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                    />
-                </div>
-            </header>
+                    <div className="w-full md:w-auto flex flex-col sm:flex-row items-center gap-3">
+                        <div className="relative w-full sm:w-64">
+                            <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/40" />
+                            <input
+                                type="text"
+                                placeholder="Hujjatni qidirish..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="w-full pl-11 pr-4 py-2.5 bg-black/20 border border-white/20 rounded-full focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                            />
+                        </div>
+                        <button 
+                            onClick={() => setCreateModalOpen(true)}
+                            className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 text-white bg-primary rounded-full shadow hover:bg-primary-dark transition-colors"
+                        >
+                            <PlusIcon className="w-5 h-5" />
+                            <span>Yangi hujjat</span>
+                        </button>
+                    </div>
+                </header>
 
-            {/* Main Content */}
-            <div className="flex-grow flex gap-6 mt-6">
-                {/* Sidebar */}
-                <nav className="w-48 flex-shrink-0">
-                    <ul className="space-y-2">
-                        <li>
-                            <button 
-                                onClick={() => setActiveTab('kiruvchi')}
-                                className={`w-full text-left px-4 py-2 rounded-lg transition-colors ${activeTab === 'kiruvchi' ? 'bg-white/20' : 'hover:bg-white/10'}`}
-                            >
-                                Kiruvchi
-                            </button>
-                        </li>
-                        <li>
-                             <button 
-                                onClick={() => setActiveTab('chiquvchi')}
-                                className={`w-full text-left px-4 py-2 rounded-lg transition-colors ${activeTab === 'chiquvchi' ? 'bg-white/20' : 'hover:bg-white/10'}`}
-                            >
-                                Chiquvchi
-                            </button>
-                        </li>
-                        <li>
-                             <button 
-                                onClick={() => setActiveTab('hisobot')}
-                                className={`w-full text-left px-4 py-2 rounded-lg transition-colors ${activeTab === 'hisobot' ? 'bg-white/20' : 'hover:bg-white/10'}`}
-                            >
-                                Hisobot
-                            </button>
-                        </li>
-                    </ul>
-                </nav>
+                {/* Main Content */}
+                <div className="flex-grow flex gap-8 mt-4 overflow-hidden">
+                    {/* Sidebar */}
+                    <aside className="w-60 flex-shrink-0 pr-4 border-r border-white/10 overflow-y-auto">
+                        <h2 className="text-sm font-semibold uppercase text-white/50 mb-4">Hujjat turi</h2>
+                        <ul className="space-y-2 mb-8">
+                            <li>
+                                <button
+                                    onClick={() => setActiveTab('kiruvchi')}
+                                    className={`w-full text-left px-4 py-2.5 rounded-lg transition-colors text-base font-medium ${activeTab === 'kiruvchi' ? 'bg-white/10 text-white' : 'text-white/70 hover:bg-white/10'}`}
+                                >
+                                    Kiruvchi
+                                </button>
+                            </li>
+                            <li>
+                                <button
+                                    onClick={() => setActiveTab('chiquvchi')}
+                                    className={`w-full text-left px-4 py-2.5 rounded-lg transition-colors text-base font-medium ${activeTab === 'chiquvchi' ? 'bg-white/10 text-white' : 'text-white/70 hover:bg-white/10'}`}
+                                >
+                                    Chiquvchi
+                                </button>
+                            </li>
+                        </ul>
+                        <h2 className="text-sm font-semibold uppercase text-white/50 mb-4">Kartoteka</h2>
+                        <ul className="space-y-1">
+                            {KARTOTEKA_ITEMS.map(item => (
+                                <li key={item}>
+                                    <button
+                                        onClick={() => setActiveKartoteka(item)}
+                                        className={`w-full text-left px-4 py-2 rounded-lg transition-colors text-sm ${activeKartoteka === item ? 'bg-white/5 text-cyan-300' : 'text-white/60 hover:bg-white/5 hover:text-white'}`}
+                                    >
+                                        {item}
+                                    </button>
+                                </li>
+                            ))}
+                        </ul>
+                    </aside>
 
-                {/* Document List */}
-                <div className="flex-grow">
-                    {loading && <p>Yuklanmoqda...</p>}
-                    {error && <p className="text-red-400">{error}</p>}
-                    {!loading && !error && (
-                        <CorrespondenceList correspondences={filteredCorrespondences} />
-                    )}
+                    {/* Document Grid */}
+                    <main className="flex-grow overflow-y-auto">
+                        {loading && <p className="text-center pt-10">Hujjatlar yuklanmoqda...</p>}
+                        {error && <p className="text-center pt-10 text-red-400">{error}</p>}
+                        {!loading && !error && (
+                            <>
+                                {filteredCorrespondences.length > 0 ? (
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-5">
+                                        {filteredCorrespondences.map(doc => (
+                                            <DocumentCard key={doc.id} document={doc} />
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col items-center justify-center h-full text-center text-white/60">
+                                        <p className="text-lg">Hujjatlar topilmadi</p>
+                                        <p className="text-sm">Filterlarni o'zgartirib ko'ring.</p>
+                                    </div>
+                                )}
+                            </>
+                        )}
+                    </main>
                 </div>
             </div>
-        </div>
+            {isCreateModalOpen && (
+                <CreateCorrespondenceModal 
+                    onClose={() => setCreateModalOpen(false)}
+                    onSuccess={() => {
+                        // После успешного создания обновляем список
+                        fetchData(); 
+                    }}
+                />
+            )}
+        </>
     );
 };
 
