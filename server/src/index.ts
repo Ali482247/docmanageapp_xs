@@ -207,118 +207,145 @@ app.get("/api/departments", authenticateToken, async (req, res) => {
 
 // --- API ДЛЯ УПРАВЛЕНИЯ НАРУШЕНИЯМИ (VIOLATIONS) ---
 app.get("/api/violations", authenticateToken, async (req, res) => {
-    try {
-        const violations = await prisma.violation.findMany({
-            orderBy: { date: 'desc' },
-            include: {
-                user: { select: { id: true, name: true } },
-                correspondence: { select: { id: true, title: true } }
-            }
-        });
-        res.json(violations);
-    } catch (e) {
-        console.error(e);
-        res.status(500).json({ error: "Server error while fetching violations" });
-    }
+    try {
+        const violations = await prisma.violation.findMany({
+            orderBy: { date: 'desc' },
+            include: {
+                user: { select: { id: true, name: true } },
+                correspondence: { select: { id: true, title: true } }
+            }
+        });
+        res.json(violations);
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: "Server error while fetching violations" });
+    }
 });
 
 app.post("/api/violations", authenticateToken, async (req, res) => {
-    try {
-        const { userId, reason, type, date, correspondenceId } = req.body;
-        if (!userId || !reason || !type || !date) {
-            return res.status(400).json({ error: "userId, reason, type, and date are required" });
-        }
-        const dataToCreate: any = {
-            reason, type,
-            date: new Date(date),
-            userId: Number(userId),
-        };
-        if (correspondenceId) {
-            dataToCreate.correspondenceId = Number(correspondenceId);
-        }
-        const newViolation = await prisma.violation.create({
-            data: dataToCreate,
-        });
-        res.status(201).json(newViolation);
-    } catch (e) {
-        console.error(e);
-        res.status(500).json({ error: "Failed to create violation" });
-    }
+    try {
+        const { userId, reason, type, date, correspondenceId } = req.body;
+        if (!userId || !reason || !type || !date) {
+            return res.status(400).json({ error: "userId, reason, type, and date are required" });
+        }
+        const dataToCreate: any = {
+            reason, type,
+            date: new Date(date),
+            userId: Number(userId),
+        };
+        if (correspondenceId) {
+            dataToCreate.correspondenceId = Number(correspondenceId);
+        }
+        const newViolation = await prisma.violation.create({
+            data: dataToCreate,
+        });
+        res.status(201).json(newViolation);
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: "Failed to create violation" });
+    }
 });
 
 
-// --- START: ИСПРАВЛЕННЫЙ И УНИФИЦИРОВАННЫЙ БЛОК ДЛЯ ДОКУМЕНТОВ ---
+// --- API ДЛЯ ДОКУМЕНТОВ (CORRESPONDENCES) ---
 
-// Определяем единую структуру для включения связанных данных
 const documentInclude = {
-    author: { select: { id: true, name: true } },
-    mainExecutor: { select: { id: true, name: true, department: { select: { name: true } } } },
-    internalAssignee: { select: { id: true, name: true } },
-    reviewers: {
-        orderBy: { updatedAt: 'desc' },
-        select: {
-            status: true,
-            user: { select: { id: true, name: true } }
-        }
-    }
+    author: { select: { id: true, name: true } },
+    mainExecutor: { select: { id: true, name: true, department: { select: { name: true } } } },
+    internalAssignee: { select: { id: true, name: true } },
+    reviewers: {
+        orderBy: { updatedAt: 'desc' },
+        select: {
+            status: true,
+            comment: true,
+            user: { select: { id: true, name: true } }
+        }
+    }
 } satisfies Prisma.DocumentInclude;
-
 
 // GET /api/correspondences (СПИСОК ДОКУМЕНТОВ)
 app.get("/api/correspondences", authenticateToken, async (req, res) => {
-    try {
-        const userId = (req as any).user.userId;
-        const user = await prisma.user.findUnique({
-            where: { id: userId },
-            include: { role: true, department: true }
-        });
+    try {
+        const userId = (req as any).user.userId;
+        const user = await prisma.user.findUnique({
+            where: { id: userId },
+            include: { role: true, department: true }
+        });
 
-        if (!user) {
-            return res.status(403).json({ error: "User not found" });
-        }
+        if (!user) {
+            return res.status(403).json({ error: "User not found" });
+        }
 
-        let whereClause: Prisma.DocumentWhereInput = {};
+        let whereClause: Prisma.DocumentWhereInput = {};
+        
+        // Базовое условие для любого пользователя: он видит документ, если он является ожидающим согласующим.
+        const reviewCondition = { reviewers: { some: { userId: user.id, status: 'PENDING' } } };
 
-        switch (user.role.name) {
-            case 'Admin':
-            case 'Bank apparati':
-                whereClause = {};
-                break;
-            case 'Boshqaruv':
-                whereClause = { stage: { in: ['ASSIGNMENT', 'SIGNATURE', 'RESOLUTION'] } };
-                break;
-            case 'Yordamchi':
-                whereClause = { stage: 'RESOLUTION' };
-                break;
-            case 'Tarmoq':
-                whereClause = { mainExecutor: { departmentId: user.departmentId } };
-                break;
-            case 'Reviewer':
-                whereClause = { internalAssigneeId: user.id };
-                break;
-            default:
-                return res.json([]);
-        }
+        switch (user.role.name) {
+            case 'Admin':
+            case 'Bank apparati':
+                whereClause = {}; // Видят всё
+                break;
+            case 'Boshqaruv':
+                // Видит документы на своих этапах И те, что ожидают его согласования
+                whereClause = {
+                    OR: [
+                        { stage: { in: ['ASSIGNMENT', 'SIGNATURE', 'RESOLUTION'] } },
+                        reviewCondition
+                    ]
+                };
+                break;
+            case 'Yordamchi':
+                // Видит документы на этапе резолюции И те, что ожидают его согласования
+                whereClause = {
+                    OR: [
+                        { stage: 'RESOLUTION' },
+                        reviewCondition
+                    ]
+                };
+                break;
+            case 'Tarmoq':
+                // Глава отдела видит документы своего отдела И те, что ожидают его согласования
+                whereClause = {
+                    OR: [
+                        { mainExecutor: { departmentId: user.departmentId } },
+                        reviewCondition
+                    ]
+                };
+                break;
+            case 'Reviewer':
+                // Рядовой сотрудник видит назначенные ему задачи И те, что ожидают его согласования
+                whereClause = {
+                    OR: [
+                        { internalAssigneeId: user.id },
+                        reviewCondition
+                    ]
+                };
+                break;
+            default:
+                // Остальные роли видят только те документы, где они являются согласующими
+                whereClause = reviewCondition;
+                break;
+        }
 
-        const documents = await prisma.document.findMany({
-            where: whereClause,
-            include: documentInclude, // Используем единую структуру
-            orderBy: { createdAt: 'desc' }
-        });
-        res.json(documents);
-    } catch (e) {
-        console.error(e);
-        res.status(500).json({ error: "Server error while fetching documents" });
-    }
+        const documents = await prisma.document.findMany({
+            where: whereClause,
+            include: documentInclude,
+            orderBy: { createdAt: 'desc' }
+        });
+        res.json(documents);
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: "Server error while fetching documents" });
+    }
 });
 
-// GET /api/correspondences/:id (ОДИН ДОКУМЕНТ)
 app.get("/api/correspondences/:id", authenticateToken, async (req, res) => {
     const { id } = req.params;
     try {
         const document = await prisma.document.findUnique({
             where: { id: Number(id) },
-            include: documentInclude, // Используем ту же самую единую структуру
+            include: documentInclude,
         });
         if (!document) return res.status(404).json({ error: "Document not found" });
         res.json(document);
@@ -326,9 +353,6 @@ app.get("/api/correspondences/:id", authenticateToken, async (req, res) => {
         res.status(500).json({ error: "Server error" });
     }
 });
-
-// --- END: ИСПРАВЛЕННЫЙ БЛОК ---
-
 
 app.post("/api/correspondences/incoming", authenticateToken, async (req, res) => {
     const { title, content, source, kartoteka } = req.body;
@@ -353,122 +377,153 @@ app.post("/api/correspondences/incoming", authenticateToken, async (req, res) =>
 });
 
 app.post("/api/correspondences/outgoing", authenticateToken, async (req, res) => {
-    const { title, content, kartoteka } = req.body;
-    const authorId = (req as any).user.userId;
+    const { title, content, kartoteka } = req.body;
+    const authorId = (req as any).user.userId;
 
-    if (!title) {
-        return res.status(400).json({ error: "Title is required" });
-    }
+    if (!title) {
+        return res.status(400).json({ error: "Title is required" });
+    }
 
-    try {
-        const newDocument = await prisma.document.create({
-            data: {
-                title,
-                content,
-                authorId,
-                kartoteka,
-                type: 'Chiquvchi',
-                stage: 'DRAFTING',
-                source: 'Bank ichki tizimi'
-            }
-        });
-        res.status(201).json(newDocument);
-    } catch (e) {
-        console.error(e);
-        res.status(500).json({ error: "Failed to create outgoing document" });
-    }
+    try {
+        const newDocument = await prisma.document.create({
+            data: {
+                title,
+                content,
+                authorId,
+                kartoteka,
+                type: 'Chiquvchi',
+                stage: 'DRAFTING',
+                source: 'Bank ichki tizimi'
+            }
+        });
+        res.status(201).json(newDocument);
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: "Failed to create outgoing document" });
+    }
 });
 
-// --- ЭНДПОИНТЫ ДЛЯ СОГЛАСОВАНИЯ ---
+// --- ЭНДПОИНТЫ ДЛЯ ЖИЗНЕННОГО ЦИКЛА ДОКУМЕНТА ---
 app.post("/api/correspondences/:id/submit-review", authenticateToken, async (req, res) => {
-    const { id } = req.params;
-    const documentId = Number(id);
+    const { id } = req.params;
+    const documentId = Number(id);
 
-    try {
-        const requiredReviewers = await prisma.user.findMany({
-            where: {
-                OR: [
-                    { role: { name: 'Bank apparati' } },
-                    { department: { name: 'Yuridik Departament' } },
-                    { department: { name: 'Komplayens nazorat' } },
-                ]
-            }
-        });
+    try {
+        const requiredReviewers = await prisma.user.findMany({
+            where: {
+                OR: [
+                    { role: { name: 'Bank apparati' } },
+                    { department: { name: 'Yuridik Departament' } },
+                    { department: { name: 'Komplayens nazorat' } },
+                ]
+            }
+        });
 
-        if (requiredReviewers.length === 0) {
-            return res.status(404).json({ error: "Required reviewers not found. Please seed the database." });
-        }
+        if (requiredReviewers.length === 0) {
+            return res.status(404).json({ error: "Required reviewers not found. Please seed the database." });
+        }
 
-        await prisma.documentReviewer.createMany({
-            data: requiredReviewers.map(reviewer => ({
-                documentId: documentId,
-                userId: reviewer.id,
-                status: 'PENDING'
-            })),
-            skipDuplicates: true
-        });
+        await prisma.documentReviewer.createMany({
+            data: requiredReviewers.map(reviewer => ({
+                documentId: documentId,
+                userId: reviewer.id,
+                status: 'PENDING'
+            })),
+            skipDuplicates: true
+        });
 
-        const updatedDocument = await prisma.document.update({
-            where: { id: documentId },
-            data: { stage: 'FINAL_REVIEW' }
-        });
+        await prisma.document.update({
+            where: { id: documentId },
+            data: { stage: 'FINAL_REVIEW' }
+        });
+        
+        const finalDocument = await prisma.document.findUnique({
+            where: { id: documentId },
+            include: documentInclude,
+        });
+        res.json(finalDocument);
 
-        res.json(updatedDocument);
-
-    } catch (e) {
-        console.error(e);
-        res.status(500).json({ error: "Failed to submit for review." });
-    }
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: "Failed to submit for review." });
+    }
 });
 
 app.post("/api/correspondences/:id/approve-review", authenticateToken, async (req, res) => {
-    const { id } = req.params;
-    const documentId = Number(id);
-    const userId = (req as any).user.userId;
+    const { id } = req.params;
+    const documentId = Number(id);
+    const userId = (req as any).user.userId;
 
-    try {
-        const updatedReview = await prisma.documentReviewer.update({
-            where: {
-                documentId_userId: {
-                    documentId: documentId,
-                    userId: userId
-                }
-            },
-            data: { status: 'APPROVED' }
-        });
+    try {
+        const updatedReview = await prisma.documentReviewer.update({
+            where: {
+                documentId_userId: { documentId, userId }
+            },
+            data: { status: 'APPROVED' }
+        });
 
-        if (!updatedReview) {
-            return res.status(404).json({ error: "Reviewer entry not found for this user and document." });
-        }
+        if (!updatedReview) {
+            return res.status(404).json({ error: "Reviewer entry not found for this user and document." });
+        }
 
-        const pendingReviews = await prisma.documentReviewer.count({
-            where: {
-                documentId: documentId,
-                status: 'PENDING'
-            }
-        });
+        const pendingReviews = await prisma.documentReviewer.count({
+            where: { documentId, status: 'PENDING' }
+        });
 
-        if (pendingReviews === 0) {
-            const documentAfterReview = await prisma.document.update({
-                where: { id: documentId },
-                data: { stage: 'SIGNATURE' }
-            });
-             // Возвращаем полный объект документа, чтобы фронтенд мог обновить состояние
-            const finalDocument = await prisma.document.findUnique({
-                where: { id: documentId },
-                include: documentInclude,
-            });
-            return res.json(finalDocument);
-        }
+        if (pendingReviews === 0) {
+            await prisma.document.update({
+                where: { id: documentId },
+                data: { stage: 'SIGNATURE' }
+            });
+            const finalDocument = await prisma.document.findUnique({
+                where: { id: documentId },
+                include: documentInclude,
+            });
+            return res.json(finalDocument);
+        }
 
-        res.status(200).json({ message: "Review approved successfully." });
+        res.status(200).json({ message: "Review approved successfully." });
 
-    } catch (e) {
-        console.error(e);
-        res.status(500).json({ error: "Failed to approve review." });
-    }
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: "Failed to approve review." });
+    }
 });
 
+app.post("/api/correspondences/:id/reject-review", authenticateToken, async (req, res) => {
+    const { id } = req.params;
+    const { comment } = req.body;
+    const documentId = Number(id);
+    const userId = (req as any).user.userId;
+
+    try {
+        await prisma.documentReviewer.update({
+            where: {
+                documentId_userId: { documentId, userId }
+            },
+            data: { 
+                status: 'REJECTED',
+                comment: comment || 'Без комментария'
+            }
+        });
+
+        await prisma.document.update({
+            where: { id: documentId },
+            data: { stage: 'REVISION_REQUESTED' }
+        });
+        
+        const finalDocument = await prisma.document.findUnique({
+            where: { id: documentId },
+            include: documentInclude,
+        });
+
+        res.json(finalDocument);
+
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: "Failed to reject review." });
+    }
+});
 
 app.put("/api/correspondences/:id/stage", authenticateToken, async (req, res) => {
     const { id } = req.params;
@@ -505,6 +560,7 @@ app.post("/api/correspondences/:id/assign", authenticateToken, async (req, res) 
                 mainExecutorId: Number(mainExecutorId),
                 stage: 'EXECUTION',
             },
+            include: documentInclude,
         });
         res.json(updatedDocument);
     } catch (e) {
@@ -526,10 +582,41 @@ app.post("/api/correspondences/:id/delegate", authenticateToken, async (req, res
             data: {
                 internalAssigneeId: Number(internalAssigneeId),
             },
+            include: documentInclude,
         });
         res.json(updatedDocument);
     } catch (e) {
         res.status(500).json({ error: "Failed to delegate task" });
+    }
+});
+
+app.post("/api/correspondences/:id/sign", authenticateToken, async (req, res) => {
+    const { id } = req.params;
+    const documentId = Number(id);
+    const userId = (req as any).user.userId;
+
+    try {
+        const user = await prisma.user.findUnique({ where: { id: userId }, include: { role: true }});
+        if (user?.role.name !== 'Boshqaruv') {
+            return res.status(403).json({ error: "You do not have permission to sign documents." });
+        }
+
+        const document = await prisma.document.findUnique({ where: { id: documentId } });
+        if (document?.stage !== 'SIGNATURE') {
+            return res.status(400).json({ error: `Document is not in SIGNATURE stage, but in ${document?.stage}` });
+        }
+
+        const updatedDocument = await prisma.document.update({
+            where: { id: documentId },
+            data: { stage: 'DISPATCH' },
+            include: documentInclude,
+        });
+
+        res.json(updatedDocument);
+
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: "Failed to sign the document." });
     }
 });
 
