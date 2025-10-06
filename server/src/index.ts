@@ -620,6 +620,41 @@ app.post("/api/correspondences/:id/sign", authenticateToken, async (req, res) =>
     }
 });
 
+// --- START: НОВЫЙ ЭНДПОИНТ ДЛЯ ОТПРАВКИ/ЗАВЕРШЕНИЯ ---
+app.post("/api/correspondences/:id/dispatch", authenticateToken, async (req, res) => {
+    const { id } = req.params;
+    const documentId = Number(id);
+    const userId = (req as any).user.userId;
+
+    try {
+        // Проверяем, что у пользователя есть права (роль Bank apparati)
+        const user = await prisma.user.findUnique({ where: { id: userId }, include: { role: true }});
+        if (user?.role.name !== 'Bank apparati') {
+            return res.status(403).json({ error: "You do not have permission to dispatch documents." });
+        }
+
+        // Находим документ и проверяем, что он на правильном этапе
+        const document = await prisma.document.findUnique({ where: { id: documentId } });
+        if (document?.stage !== 'DISPATCH') {
+            return res.status(400).json({ error: `Document is not in DISPATCH stage, but in ${document?.stage}` });
+        }
+
+        // Обновляем этап документа на COMPLETED (Завершено)
+        const updatedDocument = await prisma.document.update({
+            where: { id: documentId },
+            data: { stage: 'COMPLETED' },
+            include: documentInclude,
+        });
+
+        res.json(updatedDocument);
+
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: "Failed to dispatch the document." });
+    }
+});
+// --- END: НОВЫЙ ЭНДПОИНТ ---
+
 
 // --- ЗАПУСК СЕРВЕРА ---
 process.on("SIGINT", async () => {

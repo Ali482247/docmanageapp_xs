@@ -257,6 +257,19 @@ export async function signDocument(documentId: number) {
     return res.json();
 }
 
+// --- START: НОВАЯ ФУНКЦИЯ ---
+export async function dispatchDocument(documentId: number) {
+    const res = await fetch(`${API_BASE}/api/correspondences/${documentId}/dispatch`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+    });
+    if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || "Не удалось отправить/завершить документ");
+    }
+    return res.json();
+}
+
 // --- Управление Нарушениями (Violations) ---
 interface ViolationData {
     userId: number;
