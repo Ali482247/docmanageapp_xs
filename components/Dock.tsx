@@ -5,13 +5,13 @@ import { useAuth } from '../hooks/useAuth';
 import { UserRole } from '../constants';
 // Update the import to match the actual exports from IconComponents
 import { UsersIcon, KeyIcon, ScaleIcon } from './icons/IconComponents';
-import { HomeIcon } from './icons/HomeIcon';
+// import { HomeIcon } from './icons/HomeIcon';
 
 const Dock: React.FC = () => {
     const { user } = useAuth();
     
     const navItems = [
-        { path: '/dashboard', label: 'Bosh sahifa', icon: <HomeIcon />, roles: Object.values(UserRole) },
+        // { path: '/dashboard', label: 'Bosh sahifa', icon: <HomeIcon />, roles: Object.values(UserRole) },
         { path: '/users', label: 'Foydalanuvchilar', icon: <UsersIcon />, roles: [UserRole.Admin] },
         { path: '/roles', label: 'Rollar', icon: <KeyIcon />, roles: [UserRole.Admin] },
         { path: '/discipline', label: 'Intizom', icon: <ScaleIcon />, roles: [UserRole.Admin] },

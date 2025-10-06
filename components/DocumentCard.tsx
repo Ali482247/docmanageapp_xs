@@ -1,10 +1,10 @@
-// src/components/DocumentCard.tsx
+// components/DocumentCard.tsx
 
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Correspondence } from '../types';
 import { getStageDisplayName } from '../constants';
-import { ArrowDownTrayIcon, ArrowUpTrayIcon, ClockIcon, UserIcon } from './icons/IconComponents';
+import { ArrowDownTrayIcon, ArrowUpTrayIcon, UserIcon } from './icons/IconComponents';
 import Deadline from './Deadline';
 
 interface DocumentCardProps {
@@ -17,7 +17,7 @@ const stageStyles: { [key: string]: { bg: string; text: string; dot: string } } 
   COMPLETED: { bg: 'bg-emerald-500/10', text: 'text-emerald-300', dot: 'bg-emerald-400' },
   REJECTED: { bg: 'bg-red-500/10', text: 'text-red-300', dot: 'bg-red-400' },
   ON_HOLD: { bg: 'bg-amber-500/10', text: 'text-amber-300', dot: 'bg-amber-400' },
-  // Добавьте другие стили по аналогии
+  FINAL_REVIEW: { bg: 'bg-yellow-500/10', text: 'text-yellow-300', dot: 'bg-yellow-400'},
   DEFAULT: { bg: 'bg-slate-500/10', text: 'text-slate-300', dot: 'bg-slate-400' },
 };
 
@@ -29,6 +29,7 @@ const DocumentCard: React.FC<DocumentCardProps> = ({ document }) => {
     navigate(`/correspondence/${document.id}`);
   };
 
+  // Безопасное получение имени исполнителя
   const executorName = document.mainExecutor?.name || 'Tayinlanmagan';
 
   return (

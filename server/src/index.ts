@@ -1,6 +1,6 @@
 import express, { Request, Response, NextFunction } from "express";
 import cors from "cors";
-import { PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 import dotenv from "dotenv";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
@@ -205,14 +205,69 @@ app.get("/api/departments", authenticateToken, async (req, res) => {
     }
 });
 
+// --- API ДЛЯ УПРАВЛЕНИЯ НАРУШЕНИЯМИ (VIOLATIONS) ---
+app.get("/api/violations", authenticateToken, async (req, res) => {
+    try {
+        const violations = await prisma.violation.findMany({
+            orderBy: { date: 'desc' },
+            include: {
+                user: { select: { id: true, name: true } },
+                correspondence: { select: { id: true, title: true } }
+            }
+        });
+        res.json(violations);
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: "Server error while fetching violations" });
+    }
+});
 
-// --- START: ИСПРАВЛЕННЫЙ БЛОК ---
-// --- API ДЛЯ ДОКУМЕНТОВ (CORRESPONDENCES) ---
+app.post("/api/violations", authenticateToken, async (req, res) => {
+    try {
+        const { userId, reason, type, date, correspondenceId } = req.body;
+        if (!userId || !reason || !type || !date) {
+            return res.status(400).json({ error: "userId, reason, type, and date are required" });
+        }
+        const dataToCreate: any = {
+            reason, type,
+            date: new Date(date),
+            userId: Number(userId),
+        };
+        if (correspondenceId) {
+            dataToCreate.correspondenceId = Number(correspondenceId);
+        }
+        const newViolation = await prisma.violation.create({
+            data: dataToCreate,
+        });
+        res.status(201).json(newViolation);
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: "Failed to create violation" });
+    }
+});
+
+
+// --- START: ИСПРАВЛЕННЫЙ И УНИФИЦИРОВАННЫЙ БЛОК ДЛЯ ДОКУМЕНТОВ ---
+
+// Определяем единую структуру для включения связанных данных
+const documentInclude = {
+    author: { select: { id: true, name: true } },
+    mainExecutor: { select: { id: true, name: true, department: { select: { name: true } } } },
+    internalAssignee: { select: { id: true, name: true } },
+    reviewers: {
+        orderBy: { updatedAt: 'desc' },
+        select: {
+            status: true,
+            user: { select: { id: true, name: true } }
+        }
+    }
+} satisfies Prisma.DocumentInclude;
+
+
+// GET /api/correspondences (СПИСОК ДОКУМЕНТОВ)
 app.get("/api/correspondences", authenticateToken, async (req, res) => {
     try {
         const userId = (req as any).user.userId;
-
-        // Получаем полную информацию о текущем пользователе, включая его роль и департамент
         const user = await prisma.user.findUnique({
             where: { id: userId },
             include: { role: true, department: true }
@@ -222,90 +277,61 @@ app.get("/api/correspondences", authenticateToken, async (req, res) => {
             return res.status(403).json({ error: "User not found" });
         }
 
-        let whereClause: any = {}; // Условие для Prisma запроса
+        let whereClause: Prisma.DocumentWhereInput = {};
 
-        // Строим условие в зависимости от роли пользователя
         switch (user.role.name) {
             case 'Admin':
             case 'Bank apparati':
-                // Админ и Аппарат видят все документы
                 whereClause = {};
                 break;
-            
             case 'Boshqaruv':
-                // Руководство видит документы на определенных этапах
-                whereClause = {
-                    stage: {
-                        in: ['ASSIGNMENT', 'SIGNATURE', 'RESOLUTION']
-                    }
-                };
+                whereClause = { stage: { in: ['ASSIGNMENT', 'SIGNATURE', 'RESOLUTION'] } };
                 break;
-            
             case 'Yordamchi':
-                // Помощник видит документы только на этапе резолюции
-                whereClause = {
-                    stage: 'RESOLUTION'
-                };
+                whereClause = { stage: 'RESOLUTION' };
                 break;
-            
             case 'Tarmoq':
-                // Глава департамента видит все документы, где исполнителем является сотрудник его департамента
-                whereClause = {
-                    mainExecutor: {
-                        departmentId: user.departmentId
-                    }
-                };
+                whereClause = { mainExecutor: { departmentId: user.departmentId } };
                 break;
-            
             case 'Reviewer':
-                 // Рядовой сотрудник видит только те документы, которые назначены ему внутри отдела
-                whereClause = {
-                    internalAssigneeId: user.id
-                };
+                whereClause = { internalAssigneeId: user.id };
                 break;
-            
             default:
-                // Все остальные роли (Resepshn и т.д.) не видят список в этом окне
                 return res.json([]);
         }
 
         const documents = await prisma.document.findMany({
             where: whereClause,
-            include: {
-                author: { select: { name: true } },
-                mainExecutor: { select: { name: true, department: true } },
-                internalAssignee: { select: { name: true } },
-            },
+            include: documentInclude, // Используем единую структуру
             orderBy: { createdAt: 'desc' }
         });
-
         res.json(documents);
     } catch (e) {
         console.error(e);
         res.status(500).json({ error: "Server error while fetching documents" });
     }
 });
-// --- END: ИСПРАВЛЕННЫЙ БЛОК ---
 
+// GET /api/correspondences/:id (ОДИН ДОКУМЕНТ)
 app.get("/api/correspondences/:id", authenticateToken, async (req, res) => {
     const { id } = req.params;
     try {
         const document = await prisma.document.findUnique({
             where: { id: Number(id) },
-            include: { author: true, mainExecutor: true, internalAssignee: true },
+            include: documentInclude, // Используем ту же самую единую структуру
         });
-
-        if (!document) {
-            return res.status(404).json({ error: "Document not found" });
-        }
+        if (!document) return res.status(404).json({ error: "Document not found" });
         res.json(document);
     } catch (e) {
         res.status(500).json({ error: "Server error" });
     }
 });
 
+// --- END: ИСПРАВЛЕННЫЙ БЛОК ---
+
+
 app.post("/api/correspondences/incoming", authenticateToken, async (req, res) => {
-    const { title, content, source } = req.body;
+    const { title, content, source, kartoteka } = req.body;
     const authorId = (req as any).user.userId; 
 
     if (!title || !content || !source) {
@@ -315,7 +341,7 @@ app.post("/api/correspondences/incoming", authenticateToken, async (req, res) =>
     try {
         const newDocument = await prisma.document.create({
             data: {
-                title, content, source, authorId,
+                title, content, source, authorId, kartoteka,
                 type: 'Kiruvchi',
                 stage: 'PENDING_REGISTRATION',
             }
@@ -325,6 +351,124 @@ app.post("/api/correspondences/incoming", authenticateToken, async (req, res) =>
         res.status(500).json({ error: "Failed to create document" });
     }
 });
+
+app.post("/api/correspondences/outgoing", authenticateToken, async (req, res) => {
+    const { title, content, kartoteka } = req.body;
+    const authorId = (req as any).user.userId;
+
+    if (!title) {
+        return res.status(400).json({ error: "Title is required" });
+    }
+
+    try {
+        const newDocument = await prisma.document.create({
+            data: {
+                title,
+                content,
+                authorId,
+                kartoteka,
+                type: 'Chiquvchi',
+                stage: 'DRAFTING',
+                source: 'Bank ichki tizimi'
+            }
+        });
+        res.status(201).json(newDocument);
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: "Failed to create outgoing document" });
+    }
+});
+
+// --- ЭНДПОИНТЫ ДЛЯ СОГЛАСОВАНИЯ ---
+app.post("/api/correspondences/:id/submit-review", authenticateToken, async (req, res) => {
+    const { id } = req.params;
+    const documentId = Number(id);
+
+    try {
+        const requiredReviewers = await prisma.user.findMany({
+            where: {
+                OR: [
+                    { role: { name: 'Bank apparati' } },
+                    { department: { name: 'Yuridik Departament' } },
+                    { department: { name: 'Komplayens nazorat' } },
+                ]
+            }
+        });
+
+        if (requiredReviewers.length === 0) {
+            return res.status(404).json({ error: "Required reviewers not found. Please seed the database." });
+        }
+
+        await prisma.documentReviewer.createMany({
+            data: requiredReviewers.map(reviewer => ({
+                documentId: documentId,
+                userId: reviewer.id,
+                status: 'PENDING'
+            })),
+            skipDuplicates: true
+        });
+
+        const updatedDocument = await prisma.document.update({
+            where: { id: documentId },
+            data: { stage: 'FINAL_REVIEW' }
+        });
+
+        res.json(updatedDocument);
+
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: "Failed to submit for review." });
+    }
+});
+
+app.post("/api/correspondences/:id/approve-review", authenticateToken, async (req, res) => {
+    const { id } = req.params;
+    const documentId = Number(id);
+    const userId = (req as any).user.userId;
+
+    try {
+        const updatedReview = await prisma.documentReviewer.update({
+            where: {
+                documentId_userId: {
+                    documentId: documentId,
+                    userId: userId
+                }
+            },
+            data: { status: 'APPROVED' }
+        });
+
+        if (!updatedReview) {
+            return res.status(404).json({ error: "Reviewer entry not found for this user and document." });
+        }
+
+        const pendingReviews = await prisma.documentReviewer.count({
+            where: {
+                documentId: documentId,
+                status: 'PENDING'
+            }
+        });
+
+        if (pendingReviews === 0) {
+            const documentAfterReview = await prisma.document.update({
+                where: { id: documentId },
+                data: { stage: 'SIGNATURE' }
+            });
+             // Возвращаем полный объект документа, чтобы фронтенд мог обновить состояние
+            const finalDocument = await prisma.document.findUnique({
+                where: { id: documentId },
+                include: documentInclude,
+            });
+            return res.json(finalDocument);
+        }
+
+        res.status(200).json({ message: "Review approved successfully." });
+
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: "Failed to approve review." });
+    }
+});
+
 
 app.put("/api/correspondences/:id/stage", authenticateToken, async (req, res) => {
     const { id } = req.params;

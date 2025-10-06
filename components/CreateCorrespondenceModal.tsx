@@ -1,33 +1,40 @@
 import React, { useState } from 'react';
-import { createCorrespondence } from '../services/mockApi';
-import { useAuth } from '../hooks/useAuth';
+import { createOutgoingCorrespondence, createIncomingTask } from '../services/api'; // <--- ИЗМЕНЕНИЕ 1: Импортируем новую функцию
 
 interface CreateCorrespondenceModalProps {
   onClose: () => void;
   onSuccess: () => void;
 }
 
+// Список категорий для выбора
+const KARTOTEKA_OPTIONS = [
+    "Markaziy Bank",
+    "Murojaatlar",
+    "Prezident Administratsiyasi",
+    "Vazirlar Mahkamasi",
+    "Xizmat yozishmalari",
+    "Nazoratdagi",
+];
+
 const CreateCorrespondenceModal: React.FC<CreateCorrespondenceModalProps> = ({ onClose, onSuccess }) => {
-  const { user } = useAuth();
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
+  // --- ИЗМЕНЕНИЕ 2: Добавляем состояние для нового поля ---
+  const [kartoteka, setKartoteka] = useState(KARTOTEKA_OPTIONS[4]); // По умолчанию "Xizmat yozishmalari"
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) {
-      setError('Foydalanuvchi topilmadi.');
-      return;
-    }
     setLoading(true);
     setError('');
     try {
-      await createCorrespondence(title, content, user);
+      // --- ИЗМЕНЕНИЕ 3: Вызываем новую функцию API с нужными данными ---
+      await createOutgoingCorrespondence({ title, content, kartoteka });
       onSuccess();
       onClose();
-    } catch (err) {
-      setError('Hujjatni yaratishda xatolik yuz berdi.');
+    } catch (err: any) {
+      setError(err.message || 'Hujjatni yaratishda xatolik yuz berdi.');
     } finally {
       setLoading(false);
     }
@@ -57,6 +64,24 @@ const CreateCorrespondenceModal: React.FC<CreateCorrespondenceModalProps> = ({ o
               className="w-full p-2 bg-white/10 border border-white/20 rounded-md focus:ring-primary focus:border-primary" 
             />
           </div>
+
+          {/* --- ИЗМЕНЕНИЕ 4: Добавляем новое поле в форму --- */}
+          <div>
+            <label htmlFor="kartoteka" className="block mb-1 text-sm font-medium text-white/80">Kartoteka</label>
+            <select
+                id="kartoteka"
+                name="kartoteka"
+                value={kartoteka}
+                onChange={(e) => setKartoteka(e.target.value)}
+                required
+                className="w-full p-2 bg-white/10 border border-white/20 rounded-md"
+            >
+                {KARTOTEKA_OPTIONS.map(item => (
+                    <option key={item} value={item} className="text-black">{item}</option>
+                ))}
+            </select>
+          </div>
+
           <div>
             <label htmlFor="content" className="block mb-1 text-sm font-medium text-white/80">Matn</label>
             <textarea 

@@ -7,6 +7,7 @@ import CorrespondenceView from './components/CorrespondenceView';
 import UserManagement from './components/UserManagement';
 import RoleManagement from './components/RoleManagement';
 import DisciplineManagement from './components/DisciplineManagement';
+import ApiManagement from './components/ApiManagement';
 
 const App: React.FC = () => {
   const { user, login } = useAuth(); // <- важно, берем login
@@ -87,6 +88,7 @@ const App: React.FC = () => {
               <Route path="/users" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
               <Route path="/roles" element={<ProtectedRoute><RoleManagement /></ProtectedRoute>} />
               <Route path="/discipline" element={<ProtectedRoute><DisciplineManagement /></ProtectedRoute>} />
+              <Route path="/api-docs" element={<ProtectedRoute><ApiManagement /></ProtectedRoute>} />
               <Route path="*" element={<Navigate to="/dashboard" />} />
             </Routes>
           </main>

@@ -1,4 +1,4 @@
-// docmanageapp/server/schema.prisma
+// docmanageapp/server/prisma/schema.prisma
 
 generator client {
   provider = "prisma-client-js"
@@ -32,6 +32,14 @@ enum DocumentStage {
   ARCHIVED
 }
 
+// --- НОВЫЙ ENUM ДЛЯ СТАТУСА СОГЛАСОВАНИЯ ---
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+
 model Role {
   id          Int      @id @default(autoincrement())
   name        String   @unique
@@ -50,41 +58,70 @@ model User {
   email        String   @unique
   name         String?
   password     String
-
   roleId       Int
   role         Role     @relation(fields: [roleId], references: [id])
-
   departmentId Int
   department   Department @relation(fields: [departmentId], references: [id])
-
   managerId    Int?
   manager      User?    @relation("UserManagedBy", fields: [managerId], references: [id])
   reports      User[]   @relation("UserManagedBy")
 
   documents     Document[] @relation("DocumentAuthor")
   tasks         Document[] @relation("DocumentExecutor")
-  internalTasks Document[] @relation("InternalDocumentExecutor") // <-- ДОБАВЛЕНО
+  internalTasks Document[] @relation("InternalDocumentExecutor")
+  violations    Violation[]
+
+  // --- ДОБАВЛЕНА СВЯЗЬ С СОГЛАСУЮЩИМИ ---
+  reviews       DocumentReviewer[]
 }
 
 model Document {
-  id             Int           @id @default(autoincrement())
-  title          String
-  content        String?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
-  type           DocumentType  @default(Kiruvchi)
-  stage          DocumentStage @default(PENDING_REGISTRATION)
-  deadline       DateTime?
-  source         String?
+  id                 Int           @id @default(autoincrement())
+  title              String
+  content            String?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  type               DocumentType  @default(Kiruvchi)
+  stage              DocumentStage @default(PENDING_REGISTRATION)
+  deadline           DateTime?
+  source             String?
+  kartoteka          String?
 
-  authorId       Int
-  author         User          @relation("DocumentAuthor", fields: [authorId], references: [id])
-
-  mainExecutorId Int?
-  mainExecutor   User?         @relation("DocumentExecutor", fields: [mainExecutorId], references: [id])
-
-  // --- НОВЫЕ ПОЛЯ ---
+  authorId           Int
+  author             User          @relation("DocumentAuthor", fields: [authorId], references: [id])
+  mainExecutorId     Int?
+  mainExecutor       User?         @relation("DocumentExecutor", fields: [mainExecutorId], references: [id])
   internalAssigneeId Int?
-  internalAssignee   User? @relation("InternalDocumentExecutor", fields: [internalAssigneeId], references: [id])
-  // -----------------
+  internalAssignee   User?         @relation("InternalDocumentExecutor", fields: [internalAssigneeId], references: [id])
+  violations         Violation[]
+
+  // --- ДОБАВЛЕНА СВЯЗЬ С СОГЛАСУЮЩИМИ ---
+  reviewers          DocumentReviewer[]
+}
+
+model Violation {
+  id                Int       @id @default(autoincrement())
+  date              DateTime
+  reason            String
+  type              String
+  userId            Int
+  user              User      @relation(fields: [userId], references: [id])
+  correspondenceId  Int?
+  correspondence    Document? @relation(fields: [correspondenceId], references: [id])
+}
+
+// --- ДОБАВЛЕНА НОВАЯ МОДЕЛЬ (ПРОМЕЖУТОЧНАЯ ТАБЛИЦА) ---
+model DocumentReviewer {
+  id          Int          @id @default(autoincrement())
+  status      ReviewStatus @default(PENDING)
+  comment     String?
+  updatedAt   DateTime     @updatedAt
+
+  documentId  Int
+  document    Document     @relation(fields: [documentId], references: [id])
+
+  userId      Int
+  user        User         @relation(fields: [userId], references: [id])
+
+  @@unique([documentId, userId]) // Гарантирует, что один пользователь может быть в списке согласующих для документа только один раз
 }

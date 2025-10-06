@@ -1,4 +1,4 @@
-// src/components/Devonxona.tsx
+// components/Devonxona.tsx
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../hooks/useAuth';
@@ -10,15 +10,9 @@ import DocumentCard from './DocumentCard';
 import CreateCorrespondenceModal from './CreateCorrespondenceModal';
 import { PlusIcon, SearchIcon } from './icons/IconComponents';
 
-// Список категорий из Figma
 const KARTOTEKA_ITEMS = [
-    "Barchasi",
-    "Markaziy Bank",
-    "Murojaatlar",
-    "Prezident Administratsiyasi",
-    "Vazirlar Mahkamasi",
-    "Xizmat yozishmalari",
-    "Nazoratdagi",
+    "Barchasi", "Markaziy Bank", "Murojaatlar", "Prezident Administratsiyasi",
+    "Vazirlar Mahkamasi", "Xizmat yozishmalari", "Nazoratdagi",
 ];
 
 const Devonxona: React.FC = () => {
@@ -27,11 +21,9 @@ const Devonxona: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     
-    // Состояния для фильтров
     const [activeTab, setActiveTab] = useState<'kiruvchi' | 'chiquvchi'>('kiruvchi');
     const [activeKartoteka, setActiveKartoteka] = useState('Barchasi');
     const [searchTerm, setSearchTerm] = useState('');
-
     const [isCreateModalOpen, setCreateModalOpen] = useState(false);
 
     const fetchData = () => {
@@ -40,23 +32,16 @@ const Devonxona: React.FC = () => {
         setError('');
         getCorrespondences()
             .then(data => {
-                // Преобразуем данные с сервера, чтобы они соответствовали типу Correspondence
-                const formattedData = data.map((doc: any) => ({
-                    ...doc,
-                    type: doc.type, // Kiruvchi | Chiquvchi
-                    stage: doc.stage, // Enum из Prisma
-                    deadline: doc.deadline,
-                    mainExecutor: doc.mainExecutor,
-                    internalAssignee: doc.internalAssignee,
-                }));
-                setCorrespondences(formattedData);
+                setCorrespondences(data || []); // Гарантируем, что всегда будет массив
             })
-            .catch(() => setError('Hujjatlarni yuklashda xatolik yuz berdi.'))
+            .catch((err) => {
+                console.error(err);
+                setError('Hujjatlarni yuklashda xatolik yuz berdi.');
+            })
             .finally(() => setLoading(false));
     };
 
     useEffect(() => {
-        // Условие, чтобы не загружать список для ролей со спец. дашбордом
         if (user && ![UserRole.Resepshn, UserRole.BankKengashiKotibi, UserRole.KollegialOrganKotibi].includes(user.role as UserRole)) {
             fetchData();
         } else {
@@ -65,26 +50,26 @@ const Devonxona: React.FC = () => {
     }, [user]);
 
     const filteredCorrespondences = useMemo(() => {
+        if (!Array.isArray(correspondences)) return [];
+
         return correspondences
-            .filter(c => c.type.toLowerCase() === activeTab)
+            .filter(c => (c.type || '').toLowerCase() === activeTab)
             .filter(c => {
-                 // Фильтр по картотеке (пока MOCK, нужно будет добавить поле в БД)
                  if (activeKartoteka === 'Barchasi') return true;
-                 // @ts-ignore
                  return c.kartoteka === activeKartoteka;
             })
             .filter(c => {
                 const search = searchTerm.toLowerCase();
                 if (!search) return true;
-                return c.title.toLowerCase().includes(search) ||
-                       (c.content && c.content.toLowerCase().includes(search)) ||
-                       (c.mainExecutor?.name && c.mainExecutor.name.toLowerCase().includes(search));
+                const titleMatch = (c.title || '').toLowerCase().includes(search);
+                const contentMatch = (c.content || '').toLowerCase().includes(search);
+                const executorMatch = (c.mainExecutor?.name || '').toLowerCase().includes(search);
+                return titleMatch || contentMatch || executorMatch;
             });
     }, [correspondences, activeTab, activeKartoteka, searchTerm]);
 
     if (!user) return null;
 
-    // Для ролей с особым дашбордом
     if ([UserRole.Resepshn, UserRole.BankKengashiKotibi, UserRole.KollegialOrganKotibi].includes(user.role as UserRole)) {
         return <RoleSpecificDashboard user={user} />;
     }
@@ -92,7 +77,6 @@ const Devonxona: React.FC = () => {
     return (
         <>
             <div className="flex flex-col h-full text-white">
-                {/* Header */}
                 <header className="flex-shrink-0 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-6">
                     <div>
                         <h1 className="text-3xl font-bold tracking-wider">DEVONXONA</h1>
@@ -119,9 +103,7 @@ const Devonxona: React.FC = () => {
                     </div>
                 </header>
 
-                {/* Main Content */}
                 <div className="flex-grow flex gap-8 mt-4 overflow-hidden">
-                    {/* Sidebar */}
                     <aside className="w-60 flex-shrink-0 pr-4 border-r border-white/10 overflow-y-auto">
                         <h2 className="text-sm font-semibold uppercase text-white/50 mb-4">Hujjat turi</h2>
                         <ul className="space-y-2 mb-8">
@@ -157,7 +139,6 @@ const Devonxona: React.FC = () => {
                         </ul>
                     </aside>
 
-                    {/* Document Grid */}
                     <main className="flex-grow overflow-y-auto">
                         {loading && <p className="text-center pt-10">Hujjatlar yuklanmoqda...</p>}
                         {error && <p className="text-center pt-10 text-red-400">{error}</p>}
@@ -183,10 +164,7 @@ const Devonxona: React.FC = () => {
             {isCreateModalOpen && (
                 <CreateCorrespondenceModal 
                     onClose={() => setCreateModalOpen(false)}
-                    onSuccess={() => {
-                        // После успешного создания обновляем список
-                        fetchData(); 
-                    }}
+                    onSuccess={fetchData}
                 />
             )}
         </>
