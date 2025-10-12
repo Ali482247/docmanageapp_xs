@@ -1,26 +1,71 @@
-import React from 'react';
-import { BoldIcon, ItalicIcon, UnderlineIcon, AlignLeftIcon, AlignCenterIcon, AlignRightIcon } from './icons/IconComponents';
+// C:\Users\aliak\Desktop\Док-оборот\docmanageapp\components\DocumentEditorPreview.tsx
+
+import React from "react";
 
 interface DocumentEditorPreviewProps {
   content: string;
 }
 
 const DocumentEditorPreview: React.FC<DocumentEditorPreviewProps> = ({ content }) => {
+  // --- НОВЫЙ БЛОК: Умный парсинг контента ---
+  // Мы используем useMemo, чтобы эта логика не выполнялась при каждом рендере, а только когда меняется `content`.
+  const parsedContent = React.useMemo(() => {
+    if (!content) return [];
+
+    // 1. Разбиваем весь текст на строки
+    return content.split('\n')
+      .map(line => {
+        // 2. Ищем первое двоеточие в строке.
+        // Это позволяет значениям после двоеточия самим содержать двоеточия.
+        const parts = line.split(/:(.*)/s);
+        
+        // 3. Если двоеточие найдено и есть текст до и после, считаем это парой "ключ-значение"
+        if (parts.length > 1 && parts[0].trim() !== '' && parts[1].trim() !== '') {
+          return { type: 'kv', label: parts[0].trim(), value: parts[1].trim() };
+        }
+        
+        // 4. Иначе, считаем это обычным параграфом
+        return { type: 'p', value: line.trim() };
+      })
+      // 5. Убираем пустые строки из результата
+      .filter(item => item.value !== '');
+  }, [content]);
+
   return (
-    <div className="bg-slate-700/50 rounded-lg p-2 sm:p-4">
-      <div className="bg-slate-800/60 rounded-t-md p-2 flex items-center gap-2 border-b border-white/10">
-        <button className="p-2 text-white/50 rounded hover:bg-white/10" disabled><BoldIcon className="w-5 h-5"/></button>
-        <button className="p-2 text-white/50 rounded hover:bg-white/10" disabled><ItalicIcon className="w-5 h-5"/></button>
-        <button className="p-2 text-white/50 rounded hover:bg-white/10" disabled><UnderlineIcon className="w-5 h-5"/></button>
-        <div className="w-px h-6 bg-white/10 mx-2"></div>
-        <button className="p-2 text-white/50 rounded hover:bg-white/10" disabled><AlignLeftIcon className="w-5 h-5"/></button>
-        <button className="p-2 text-white/50 rounded hover:bg-white/10" disabled><AlignCenterIcon className="w-5 h-5"/></button>
-        <button className="p-2 text-white/50 rounded hover:bg-white/10" disabled><AlignRightIcon className="w-5 h-5"/></button>
+    // --- ИЗМЕНЕНО: Обновленный дизайн контейнера ---
+    <div className="bg-black/20 backdrop-blur-md border border-white/10 rounded-xl shadow-lg">
+      <div className="p-6 sm:p-8">
+        <div className="space-y-6">
+
+          {/* --- НОВЫЙ БЛОК: Рендерим каждую часть контента отдельно --- */}
+          {parsedContent.map((item, index) => {
+            // Если это пара "ключ-значение", рендерим ее в специальном стиле
+            if (item.type === 'kv') {
+              return (
+                <div key={index} className="pb-4 border-b border-white/10">
+                  <p className="text-xs font-semibold uppercase text-white/50 tracking-widest">{item.label}</p>
+                  <p className="mt-1 font-medium text-white/90 whitespace-pre-wrap">{item.value}</p>
+                </div>
+              );
+            }
+
+            // Если это обычный параграф, рендерим как простой текст
+            if (item.type === 'p') {
+              return (
+                <p key={index} className="text-white/80 leading-relaxed whitespace-pre-wrap">
+                  {item.value}
+                </p>
+              );
+            }
+            
+            return null;
+          })}
+        </div>
       </div>
-      <div className="bg-white text-slate-800 p-6 sm:p-8 md:p-10 rounded-b-md min-h-[300px] max-h-[50vh] overflow-y-auto">
-        <p className="whitespace-pre-wrap font-serif leading-relaxed">
-            {content}
-        </p>
+
+      {/* Футер с версией документа */}
+      <div className="border-t border-white/10 mt-6 px-6 py-3 text-xs text-white/40 text-right">
+        <p>Document Viewer v2.0</p>
       </div>
     </div>
   );

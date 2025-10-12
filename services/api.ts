@@ -257,7 +257,6 @@ export async function signDocument(documentId: number) {
     return res.json();
 }
 
-// --- START: НОВАЯ ФУНКЦИЯ ---
 export async function dispatchDocument(documentId: number) {
     const res = await fetch(`${API_BASE}/api/correspondences/${documentId}/dispatch`, {
         method: 'POST',
@@ -299,3 +298,52 @@ export async function createViolation(violationData: ViolationData) {
     }
     return res.json();
 }
+
+// --- START: НОВЫЕ ФУНКЦИИ ДЛЯ РАБОТЫ С ДОКУМЕНТАМИ ---
+
+// Функция для постановки документа на паузу
+export async function holdCorrespondence(documentId: number) {
+    // Используем существующий универсальный эндпоинт для смены этапа
+    return advanceStage(documentId, 'ON_HOLD');
+}
+
+// Функция для отмены документа
+export async function cancelCorrespondence(documentId: number) {
+    // Используем существующий универсальный эндпоинт для смены этапа
+    return advanceStage(documentId, 'CANCELLED');
+}
+
+// Функция для обновления дедлайна
+export async function updateDeadline(documentId: number, deadlines: { deadline?: string, stageDeadline?: string }) {
+    const res = await fetch(`${API_BASE}/api/correspondences/${documentId}/deadline`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(deadlines),
+    });
+    if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || "Не удалось обновить дедлайн");
+    }
+    return res.json();
+}
+
+// Функция для обновления всех исполнителей
+interface ExecutorsPayload {
+    mainExecutorId?: number;
+    coExecutorIds?: number[];
+    contributorIds?: number[];
+}
+export async function updateExecutors(documentId: number, payload: ExecutorsPayload) {
+    const res = await fetch(`${API_BASE}/api/correspondences/${documentId}/executors`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || "Не удалось обновить исполнителей");
+    }
+    return res.json();
+}
+
+// --- END: НОВЫЕ ФУНКЦИИ ---

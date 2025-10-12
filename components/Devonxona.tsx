@@ -1,5 +1,3 @@
-// components/Devonxona.tsx
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { Correspondence } from '../types';
@@ -21,7 +19,8 @@ const Devonxona: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     
-    const [activeTab, setActiveTab] = useState<'kiruvchi' | 'chiquvchi'>('kiruvchi');
+    // --- ИСПРАВЛЕНО: Тип и значение по умолчанию изменены для соответствия данным из БД ---
+    const [activeTab, setActiveTab] = useState<'Kiruvchi' | 'Chiquvchi'>('Kiruvchi');
     const [activeKartoteka, setActiveKartoteka] = useState('Barchasi');
     const [searchTerm, setSearchTerm] = useState('');
     const [isCreateModalOpen, setCreateModalOpen] = useState(false);
@@ -32,7 +31,7 @@ const Devonxona: React.FC = () => {
         setError('');
         getCorrespondences()
             .then(data => {
-                setCorrespondences(data || []); // Гарантируем, что всегда будет массив
+                setCorrespondences(data || []);
             })
             .catch((err) => {
                 console.error(err);
@@ -53,7 +52,8 @@ const Devonxona: React.FC = () => {
         if (!Array.isArray(correspondences)) return [];
 
         return correspondences
-            .filter(c => (c.type || '').toLowerCase() === activeTab)
+            // --- ИСПРАВЛЕНО: .toLowerCase() убран, теперь сравнение идет напрямую ---
+            .filter(c => c.type === activeTab)
             .filter(c => {
                  if (activeKartoteka === 'Barchasi') return true;
                  return c.kartoteka === activeKartoteka;
@@ -109,16 +109,16 @@ const Devonxona: React.FC = () => {
                         <ul className="space-y-2 mb-8">
                             <li>
                                 <button
-                                    onClick={() => setActiveTab('kiruvchi')}
-                                    className={`w-full text-left px-4 py-2.5 rounded-lg transition-colors text-base font-medium ${activeTab === 'kiruvchi' ? 'bg-white/10 text-white' : 'text-white/70 hover:bg-white/10'}`}
+                                    onClick={() => setActiveTab('Kiruvchi')}
+                                    className={`w-full text-left px-4 py-2.5 rounded-lg transition-colors text-base font-medium ${activeTab === 'Kiruvchi' ? 'bg-white/10 text-white' : 'text-white/70 hover:bg-white/10'}`}
                                 >
                                     Kiruvchi
                                 </button>
                             </li>
                             <li>
                                 <button
-                                    onClick={() => setActiveTab('chiquvchi')}
-                                    className={`w-full text-left px-4 py-2.5 rounded-lg transition-colors text-base font-medium ${activeTab === 'chiquvchi' ? 'bg-white/10 text-white' : 'text-white/70 hover:bg-white/10'}`}
+                                    onClick={() => setActiveTab('Chiquvchi')}
+                                    className={`w-full text-left px-4 py-2.5 rounded-lg transition-colors text-base font-medium ${activeTab === 'Chiquvchi' ? 'bg-white/10 text-white' : 'text-white/70 hover:bg-white/10'}`}
                                 >
                                     Chiquvchi
                                 </button>

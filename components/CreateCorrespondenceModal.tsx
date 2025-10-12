@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { createOutgoingCorrespondence, createIncomingTask } from '../services/api'; // <--- ИЗМЕНЕНИЕ 1: Импортируем новую функцию
+// --- ИСПРАВЛЕНО: Удален неиспользуемый импорт createIncomingTask ---
+import { createOutgoingCorrespondence } from '../services/api';
 
 interface CreateCorrespondenceModalProps {
   onClose: () => void;
   onSuccess: () => void;
 }
 
-// Список категорий для выбора
 const KARTOTEKA_OPTIONS = [
     "Markaziy Bank",
     "Murojaatlar",
@@ -19,8 +19,7 @@ const KARTOTEKA_OPTIONS = [
 const CreateCorrespondenceModal: React.FC<CreateCorrespondenceModalProps> = ({ onClose, onSuccess }) => {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
-  // --- ИЗМЕНЕНИЕ 2: Добавляем состояние для нового поля ---
-  const [kartoteka, setKartoteka] = useState(KARTOTEKA_OPTIONS[4]); // По умолчанию "Xizmat yozishmalari"
+  const [kartoteka, setKartoteka] = useState(KARTOTEKA_OPTIONS[4]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -29,7 +28,6 @@ const CreateCorrespondenceModal: React.FC<CreateCorrespondenceModalProps> = ({ o
     setLoading(true);
     setError('');
     try {
-      // --- ИЗМЕНЕНИЕ 3: Вызываем новую функцию API с нужными данными ---
       await createOutgoingCorrespondence({ title, content, kartoteka });
       onSuccess();
       onClose();
@@ -64,8 +62,6 @@ const CreateCorrespondenceModal: React.FC<CreateCorrespondenceModalProps> = ({ o
               className="w-full p-2 bg-white/10 border border-white/20 rounded-md focus:ring-primary focus:border-primary" 
             />
           </div>
-
-          {/* --- ИЗМЕНЕНИЕ 4: Добавляем новое поле в форму --- */}
           <div>
             <label htmlFor="kartoteka" className="block mb-1 text-sm font-medium text-white/80">Kartoteka</label>
             <select
@@ -81,7 +77,6 @@ const CreateCorrespondenceModal: React.FC<CreateCorrespondenceModalProps> = ({ o
                 ))}
             </select>
           </div>
-
           <div>
             <label htmlFor="content" className="block mb-1 text-sm font-medium text-white/80">Matn</label>
             <textarea 

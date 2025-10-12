@@ -32,6 +32,13 @@ enum DocumentStage {
   ARCHIVED
 }
 
+enum DocumentStatus {
+  YANGI
+  IJROGA_YUBORILDI
+  KORIB_CHIQILMOQDA
+  BAJARILGAN
+}
+
 // --- НОВЫЙ ENUM ДЛЯ СТАТУСА СОГЛАСОВАНИЯ ---
 enum ReviewStatus {
   PENDING
@@ -66,13 +73,14 @@ model User {
   manager      User?    @relation("UserManagedBy", fields: [managerId], references: [id])
   reports      User[]   @relation("UserManagedBy")
 
-  documents     Document[] @relation("DocumentAuthor")
-  tasks         Document[] @relation("DocumentExecutor")
-  internalTasks Document[] @relation("InternalDocumentExecutor")
-  violations    Violation[]
-
-  // --- ДОБАВЛЕНА СВЯЗЬ С СОГЛАСУЮЩИМИ ---
-  reviews       DocumentReviewer[]
+  documents           Document[] @relation("DocumentAuthor")
+  tasks               Document[] @relation("DocumentExecutor")
+  internalTasks       Document[] @relation("InternalDocumentExecutor")
+  violations          Violation[]
+  reviews             DocumentReviewer[]
+  coExecutedDocs      DocumentCoExecutor[]
+  contributedDocs     DocumentContributor[]
+  auditLogs           AuditLog[]
 }
 
 model Document {
@@ -83,9 +91,12 @@ model Document {
   updatedAt          DateTime      @updatedAt
   type               DocumentType  @default(Kiruvchi)
   stage              DocumentStage @default(PENDING_REGISTRATION)
+  status             DocumentStatus @default(YANGI)
   deadline           DateTime?
+  stageDeadline     DateTime?
   source             String?
   kartoteka          String?
+  metadata          Json?
 
   authorId           Int
   author             User          @relation("DocumentAuthor", fields: [authorId], references: [id])
@@ -95,8 +106,62 @@ model Document {
   internalAssignee   User?         @relation("InternalDocumentExecutor", fields: [internalAssigneeId], references: [id])
   violations         Violation[]
 
-  // --- ДОБАВЛЕНА СВЯЗЬ С СОГЛАСУЮЩИМИ ---
+  // Relations
   reviewers          DocumentReviewer[]
+  coExecutors        DocumentCoExecutor[]
+  contributors       DocumentContributor[]
+  auditLogs          AuditLog[]
+  aiSuggestions      AISuggestion[]
+
+  // Indexes
+  @@index([status])
+  @@index([stage])
+  @@index([deadline])
+  @@index([stageDeadline])
+}
+
+model DocumentCoExecutor {
+  id          Int      @id @default(autoincrement())
+  documentId  Int
+  document    Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignedAt  DateTime @default(now())
+
+  @@unique([documentId, userId])
+}
+
+model DocumentContributor {
+  id          Int      @id @default(autoincrement())
+  documentId  Int
+  document    Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignedAt  DateTime @default(now())
+
+  @@unique([documentId, userId])
+}
+
+model AuditLog {
+  id          Int      @id @default(autoincrement())
+  documentId  Int
+  document    Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  timestamp   DateTime @default(now())
+  action      String
+  details     String?
+}
+
+model AISuggestion {
+  id                      Int      @id @default(autoincrement())
+  documentId             Int
+  document               Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  suggestedMainExecutorId Int?
+  reason                 String?
+  sentiment              String?
+  riskFlag               String?
+  createdAt              DateTime @default(now())
 }
 
 model Violation {
