@@ -3,12 +3,24 @@ import { useAuth } from '../hooks/useAuth';
 import { UserRole } from '../constants';
 import { Navigate } from 'react-router-dom';
 
+// Эта строка говорит TypeScript, что переменная будет доступна глобально
 declare const SwaggerUIBundle: any;
 
 const ApiManagement: React.FC = () => {
     const { user } = useAuth();
 
     useEffect(() => {
+        // --- ИЗМЕНЕНИЕ: Добавляем проверку, существует ли SwaggerUIBundle ---
+        if (typeof SwaggerUIBundle === 'undefined') {
+            console.error("SwaggerUIBundle не загружен. Проверьте тег <script> в index.html");
+            const swaggerContainer = document.getElementById('swagger-ui');
+            if (swaggerContainer) {
+                // Выводим сообщение об ошибке вместо пустого экрана
+                swaggerContainer.innerHTML = '<div class="text-white/70 text-center p-8">Не удалось загрузить средство просмотра документации API.</div>';
+            }
+            return; // Прекращаем выполнение, чтобы избежать сбоя
+        }
+
         const style = document.createElement('style');
         style.innerHTML = `
             .swagger-ui .topbar { display: none; }
@@ -52,12 +64,16 @@ const ApiManagement: React.FC = () => {
             ],
         });
 
+        // Функция очистки при уходе со страницы
         return () => {
             const swaggerUiContainer = document.getElementById('swagger-ui');
             if (swaggerUiContainer) {
                 swaggerUiContainer.innerHTML = '';
             }
-            document.head.removeChild(style);
+            // --- ИЗМЕНЕНИЕ: Проверяем, что стиль все еще существует, прежде чем удалять ---
+            if (style && document.head.contains(style)) {
+               document.head.removeChild(style);
+            }
         };
     }, []);
 
@@ -68,6 +84,7 @@ const ApiManagement: React.FC = () => {
     return (
         <div className="space-y-6">
             <h1 className="text-3xl font-bold text-white">API Management</h1>
+            {/* Этот div используется Swagger для отображения документации */}
             <div id="swagger-ui" className="swagger-container"></div>
         </div>
     );

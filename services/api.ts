@@ -153,12 +153,13 @@ export async function getCorrespondenceById(id: number) {
 export async function createIncomingTask(
   title: string,
   content: string,
-  source: string
+  source: string,
+  kartoteka: string // Добавляем новый параметр
 ) {
   const res = await fetch(`${API_BASE}/api/correspondences/incoming`, {
     method: "POST",
     headers: getAuthHeaders(),
-    body: JSON.stringify({ title, content, source }),
+    body: JSON.stringify({ title, content, source, kartoteka }), // Добавляем kartoteka в отправляемые данные
   });
   if (!res.ok) throw new Error("Не удалось создать задачу");
   return res.json();
